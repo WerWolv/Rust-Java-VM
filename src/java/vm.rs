@@ -3,12 +3,20 @@
 use crate::java;
 use crate::java::opcodes::Opcode;
 
+#[derive(Clone)]
+pub enum Value {
+    None,
+    Reference(u32),
+    Integer(u32),
+    Float(u32)
+}
+
 pub struct Scope {
     pub program_counter: u32,
 
-    pub locals: Vec<u32>,
+    pub locals: Vec<Value>,
 
-    pub stack: Vec<u32>,
+    pub stack: Vec<Value>,
     pub stack_pointer: u32
 }
 
@@ -51,9 +59,9 @@ impl VirtualMachine {
                 let mut scope = Scope {
                     program_counter: 0,
 
-                    locals: vec![0u32; code_attribute.max_locals as usize],
+                    locals: vec![Value::None; code_attribute.max_locals as usize],
 
-                    stack: vec![0u32; code_attribute.max_stack as usize],
+                    stack: vec![Value::None; code_attribute.max_stack as usize],
                     stack_pointer: 0
                 };
 
