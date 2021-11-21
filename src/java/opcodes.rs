@@ -271,6 +271,87 @@ pub enum Opcode {
     impdep2             = 0xFF
 }
 
+impl Opcode {
+
+    pub fn instruction_length(&self) -> usize {
+        match self {
+            Opcode::bipush              => 1,
+            Opcode::sipush              => 2,
+
+            Opcode::ldc                 => 1,
+            Opcode::lcd_w               => 2,
+            Opcode::lcd2_w              => 2,
+
+            Opcode::iload               => 1,
+            Opcode::lload               => 1,
+            Opcode::fload               => 1,
+            Opcode::dload               => 1,
+            Opcode::aload               => 1,
+
+            Opcode::istore              => 1,
+            Opcode::lstore              => 1,
+            Opcode::fstore              => 1,
+            Opcode::dstore              => 1,
+            Opcode::astore              => 1,
+
+            Opcode::iinc                => 2,
+
+            Opcode::ifeq                => 2,
+            Opcode::ifne                => 2,
+            Opcode::iflt                => 2,
+            Opcode::ifge                => 2,
+            Opcode::ifgt                => 2,
+            Opcode::ifle                => 2,
+
+            Opcode::if_icmpeq           => 2,
+            Opcode::if_icmpne           => 2,
+            Opcode::if_icmplt           => 2,
+            Opcode::if_icmpge           => 2,
+            Opcode::if_icmpgt           => 2,
+            Opcode::if_icmple           => 2,
+            Opcode::if_acmpeq           => 2,
+            Opcode::if_acmpne           => 2,
+
+            Opcode::goto                => 2,
+            Opcode::jsr                 => 2,
+            Opcode::ret                 => 1,
+
+            Opcode::tableswitch         => 16, // 16 or more
+            Opcode::lookupswitch        => 8,  // 8 or more
+
+            Opcode::getstatic           => 2,
+            Opcode::putstatic           => 2,
+
+            Opcode::getfield            => 2,
+            Opcode::putfield            => 2,
+
+            Opcode::invokevirtual       => 2,
+            Opcode::invokespecial       => 2,
+            Opcode::invokestatic        => 2,
+            Opcode::invokeinterface     => 4,
+            Opcode::invokedynamic       => 4,
+
+            Opcode::new                 => 2,
+            Opcode::newarray            => 1,
+            Opcode::anewarray           => 2,
+
+            Opcode::checkcast           => 2,
+            Opcode::instanceof          => 2,
+
+            Opcode::wide                => 3, // 3 or 5
+            Opcode::multianewarray      => 3,
+
+            Opcode::ifnull              => 2,
+            Opcode::ifnonnull           => 2,
+            Opcode::goto_w              => 4,
+            Opcode::jsr_w               => 4,
+
+            _                           => 0 // All other opcodes have no extra parameters
+        }
+    }
+
+}
+
 impl fmt::Display for Opcode {
 
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

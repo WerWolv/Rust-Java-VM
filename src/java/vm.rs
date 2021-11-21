@@ -25,8 +25,9 @@ impl VirtualMachine {
     }
 
     fn execute_byte_code(&self, byte_code: &Vec<u8>, scope: &mut Scope) {
-        for i in 0 .. byte_code.len() {
-            let value = byte_code.get(i).unwrap();
+        let mut pc = 0;
+        while pc < byte_code.len() {
+            let value = byte_code.get(pc).unwrap();
             let opcode : Opcode = unsafe { std::mem::transmute(*value) };
 
             println!("    0x{:02X} {} ", value, opcode);
@@ -35,6 +36,8 @@ impl VirtualMachine {
                 Opcode::nop => { },
                 _ => {}//panic!("Invalid opcode!")
             }
+
+            pc += opcode.instruction_length() + 1;
         }
     }
 
