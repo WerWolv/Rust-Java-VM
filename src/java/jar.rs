@@ -38,6 +38,8 @@ impl Jar {
 
                     if let Some(class) = class::Class::new(&file_content) {
                         classes.insert(file_name, class);
+                    } else {
+                        println!("Failed to read class file '{}'", file_name);
                     }
 
                 }
@@ -60,7 +62,7 @@ impl Jar {
         let mut manifest_content = String::new();
 
         let manifest_file = jar_archive.by_name("META-INF/MANIFEST.MF");
-        if manifest_file.is_err() { return Err("Failed to find MANIFEST.MF"); }
+        if manifest_file.is_err() { return Ok(HashMap::new()); }
 
         if manifest_file.unwrap().read_to_string(&mut manifest_content).is_err() {
             return Err("Failed to read MANIFEST.MF");
@@ -83,11 +85,15 @@ impl Jar {
         Ok(result)
     }
 
-    pub fn get_main_class(&self) -> Option<&class::Class> {
+    pub fn get_main_class(&self) -> Option<(String, &class::Class)> {
         let mut main_class_name = self.manifest.get("Main-Class")?.clone();
         main_class_name.push_str(".class");
 
-        self.classes.get(&main_class_name)
+        if let Some(main_class) = self.classes.get(&main_class_name) {
+            return Some((main_class_name, main_class));
+        }
+
+        None
     }
 
 }

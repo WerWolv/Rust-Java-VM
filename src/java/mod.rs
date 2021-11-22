@@ -1,5 +1,6 @@
 pub mod jar;
 pub mod class;
+pub mod field;
 pub mod method;
 pub mod attribute;
 pub mod vm;
@@ -9,6 +10,8 @@ pub use jar::Jar;
 
 pub use class::Class;
 pub use class::ClassFile;
+
+pub use field::Field;
 
 pub use method::Method;
 

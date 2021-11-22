@@ -1,17 +1,44 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use binrw::BinRead;
-use std::io::Cursor;
+use binrw::{BinRead, BinReaderExt, BinResult, Endian, ReadOptions};
+use std::io::{Cursor, Read, Seek};
 use binrw::binrw;
 
 use crate::java;
-use crate::java::Method;
+use crate::java::{Field, Method};
+
+fn constant_pool_entry_parser<R: Read + Seek>(reader: &mut R, ro: &ReadOptions, _: ()) -> BinResult<Vec<ConstantPoolEntry>>{
+    let constant_pool_size = reader.read_be::<u16>().unwrap();
+
+    let mut constant_pool: Vec<ConstantPoolEntry> = Vec::new();
+
+    let mut i = 0;
+    while i < constant_pool_size - 1{
+        let entry = reader.read_type::<ConstantPoolEntry>(Endian::Big).unwrap();
+
+        let mut push_none = false;
+
+        match entry {
+            ConstantPoolEntry::Long(_, _) => { push_none = true; i += 2; },
+            ConstantPoolEntry::Double(_, _) => { push_none = true; i += 2; },
+            _ => { i += 1; }
+        };
+
+        constant_pool.push(entry);
+
+        if push_none { constant_pool.push(ConstantPoolEntry::None()); }
+    }
+
+    Ok(constant_pool)
+}
 
 #[binrw]
 #[br(big)]
 #[derive(Debug)]
 pub enum ConstantPoolEntry {
+    #[br(magic(0u8))]
+    None(),
     #[br(magic(1u8))]
     String {
         length: u16,
@@ -20,13 +47,13 @@ pub enum ConstantPoolEntry {
         string: Vec<u8>
     },
     #[br(big, magic(3u8))]
-    Integer(i32),
+    Integer(u32),
     #[br(big, magic(4u8))]
-    Float(f32),
+    Float(u32),
     #[br(big, magic(5u8))]
-    Long(i64),
+    Long(u32, u32),
     #[br(big, magic(6u8))]
-    Double(f64),
+    Double(u32, u32),
     #[br(big, magic(7u8))]
     ClassReference(u16),
     #[br(big, magic(8u8))]
@@ -36,17 +63,17 @@ pub enum ConstantPoolEntry {
     #[br(big, magic(10u8))]
     MethodReference(u16, u16),
     #[br(big, magic(11u8))]
-    InterfaceMethodReference(u32),
+    InterfaceMethodReference(u16, u16),
     #[br(big, magic(12u8))]
     NameAndTypeDescriptor(u16, u16),
     #[br(big, magic(15u8))]
     MethodHandle(u8, u16),
     #[br(big, magic(16u8))]
-    MethodType(u32),
+    MethodType(u16),
     #[br(big, magic(17u8))]
-    Dynamic(u32),
+    Dynamic(u16, u16),
     #[br(big, magic(18u8))]
-    InvokeDynamic(u32),
+    InvokeDynamic(u16, u16),
     #[br(big, magic(19u8))]
     Module(u16),
     #[br(big, magic(20u8))]
@@ -86,9 +113,7 @@ pub struct ClassFile {
     pub minor_version: u16,
     pub major_version: u16,
 
-    pub constant_pool_count: u16,
-
-    #[br(big, count = constant_pool_count - 1)]
+    #[br(parse_with = constant_pool_entry_parser)]
     pub constant_pool: Vec<ConstantPoolEntry>,
 
     pub access_flags: u16,
@@ -115,6 +140,8 @@ pub struct ClassFile {
 #[derive(Debug)]
 pub struct Class {
     pub class_file: ClassFile,
+
+    pub fields: HashMap<String, java::Field>,
     pub methods: HashMap<String, java::Method>
 }
 
@@ -134,15 +161,34 @@ impl Class {
         result
     }
 
+    fn parse_fields(class_file: &ClassFile) -> HashMap<String, java::Field> {
+        let mut result = HashMap::new();
+
+        for field_info in &class_file.field_table {
+            let field = Field::new(&class_file, field_info);
+            if let Some(field) = field {
+                result.insert(field.name.clone(), field);
+            }
+
+        }
+
+        result
+    }
+
     pub fn new(data: &Vec<u8>) -> Option<Self> {
         let class_file = ClassFile::read(&mut Cursor::new(&data));
         if let Ok(class_file) = class_file {
+            let fields = Self::parse_fields(&class_file);
             let methods = Self::parse_methods(&class_file);
+
             Some(Class {
                 class_file,
+                fields,
                 methods
             })
         } else {
+            println!("Class parse error!");
+            println!("{}", class_file.unwrap_err());
             None
         }
     }
