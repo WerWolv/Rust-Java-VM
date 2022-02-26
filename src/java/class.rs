@@ -8,7 +8,7 @@ use binrw::binrw;
 use crate::java;
 use crate::java::{Field, Method};
 
-fn constant_pool_entry_parser<R: Read + Seek>(reader: &mut R, ro: &ReadOptions, _: ()) -> BinResult<Vec<ConstantPoolEntry>>{
+fn constant_pool_entry_parser<R: Read + Seek>(reader: &mut R, _: &ReadOptions, _: ()) -> BinResult<Vec<ConstantPoolEntry>>{
     let constant_pool_size = reader.read_be::<u16>().unwrap();
 
     let mut constant_pool: Vec<ConstantPoolEntry> = Vec::new();
@@ -193,19 +193,6 @@ impl Class {
             println!("Class parse error!");
             println!("{}", class_file.unwrap_err());
             None
-        }
-    }
-
-    pub fn initialize(&mut self, vm: &java::VirtualMachine) {
-        if self.initialized {
-            return;
-        }
-
-        if let Some(init_method) = self.methods.get("<init>") {
-            vm.execute_method(init_method);
-            self.initialized = true;
-        } else {
-            panic!("Failed to find <init> method!")
         }
     }
 

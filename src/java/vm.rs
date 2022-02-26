@@ -13,70 +13,52 @@ pub enum Value {
 }
 
 pub struct Scope {
-    pub program_counter: u32,
+    pub program_counter: usize,
 
     pub locals: Vec<Value>,
 
     pub stack: Vec<Value>,
-    pub stack_pointer: u32
+    pub stack_pointer: usize
+}
+
+pub struct Executor {
+
 }
 
 pub struct VirtualMachine {
     pub main_jar: java::Jar,
     pub library_jars: Vec<java::Jar>,
 
-    pub curr_class_name: String
+    pub curr_class_name: String,
+
+    executor: Executor
 }
 
-impl VirtualMachine {
+impl Executor {
 
-    pub fn new(jar: java::Jar) -> Option<Self> {
-        if let Some((name, class)) = jar.get_main_class() {
-            return Some(VirtualMachine {
-                main_jar: jar,
-                library_jars: vec![],
-                curr_class_name: name
-            });
-        } else {
-            println!("Cannot find main class!");
-        }
-
-        None
+    fn get_constant_pool_entry<'a>(&self, class: &'a java::Class, index: usize) -> Option<&'a ConstantPoolEntry> {
+        Some(&class.class_file.constant_pool[(index - 1) as usize])
     }
 
-    pub fn add_library_jar(&mut self, jar: java::Jar) {
-        self.library_jars.push(jar);
-    }
-
-    fn get_constant_pool_entry(&self, index: usize) -> Option<&ConstantPoolEntry> {
-        Some(&self.get_current_class().class_file.constant_pool[(index - 1) as usize])
-    }
-
-    fn get_current_class(&self) -> &java::Class {
-        self.main_jar.classes.get(&*self.curr_class_name).unwrap()
-    }
-
-    fn execute_byte_code(&self, byte_code: &Vec<u8>, scope: &mut Scope) {
-        let mut pc: usize = 0;
-
+    fn execute_byte_code(&self, class: &java::Class, byte_code: &Vec<u8>, scope: &mut Scope) {
         let option = |index: usize| -> u32 { *byte_code.get(index).unwrap() as u32 };
 
-        while pc < byte_code.len() {
-            let value = option(pc) as u8;
+        while scope.program_counter < byte_code.len() {
+            let value = option(scope.program_counter) as u8;
             let opcode : Opcode = unsafe { std::mem::transmute(value) };
 
             println!("    0x{:02X} {}", value, opcode);
 
             match opcode {
                 Opcode::getstatic => {
-                    let index = option(pc + 1) << 8 | option(pc + 2);
-                    if let Some(ConstantPoolEntry::FieldReference(class_index, name_and_type_index)) = self.get_constant_pool_entry((index) as usize) {
-                        if let Some(ConstantPoolEntry::ClassReference(name_index)) = self.get_constant_pool_entry(*class_index as usize) {
-                            println!("{}", self.get_current_class().class_file.get_constant_pool_string(*name_index as usize).unwrap());
+                    let index = option(scope.program_counter + 1) << 8 | option(scope.program_counter + 2);
+                    if let Some(ConstantPoolEntry::FieldReference(class_index, name_and_type_index)) = self.get_constant_pool_entry(class, (index) as usize) {
+                        if let Some(ConstantPoolEntry::ClassReference(name_index)) = self.get_constant_pool_entry(class, *class_index as usize) {
+                            println!("{}", class.class_file.get_constant_pool_string(*name_index as usize).unwrap());
                         }
-                        if let Some(ConstantPoolEntry::NameAndTypeDescriptor(name_index, type_index)) = self.get_constant_pool_entry(*name_and_type_index as usize) {
-                            println!("{}", self.get_current_class().class_file.get_constant_pool_string(*name_index as usize).unwrap());
-                            println!("{}", self.get_current_class().class_file.get_constant_pool_string(*type_index as usize).unwrap());
+                        if let Some(ConstantPoolEntry::NameAndTypeDescriptor(name_index, type_index)) = self.get_constant_pool_entry(class, *name_and_type_index as usize) {
+                            println!("{}", class.class_file.get_constant_pool_string(*name_index as usize).unwrap());
+                            println!("{}", class.class_file.get_constant_pool_string(*type_index as usize).unwrap());
                         }
                     } else {
                         println!("Invalid constant pool entry!");
@@ -86,11 +68,11 @@ impl VirtualMachine {
                 _ => {}//panic!("Invalid opcode!")
             }
 
-            pc += opcode.instruction_length() + 1;
+            scope.program_counter += opcode.instruction_length() + 1;
         }
     }
 
-    pub fn execute_method(&self, method: &java::Method) {
+    pub fn execute_method(&self, class : &java::Class, method: &java::Method) {
         println!("Executing method '{}' [ {} ]", method.name, method.descriptor);
         for attribute in &method.attributes {
             if let java::Attribute::Code(code_attribute) = attribute {
@@ -106,7 +88,7 @@ impl VirtualMachine {
                     stack_pointer: 0
                 };
 
-                self.execute_byte_code(&code_attribute.code, &mut scope);
+                self.execute_byte_code(class, &code_attribute.code, &mut scope);
 
                 return;
             }
@@ -115,12 +97,42 @@ impl VirtualMachine {
         println!("Method '{}' does not have a Code attribute!", method.name);
     }
 
+}
+
+impl VirtualMachine {
+
+    pub fn new(jar: java::Jar) -> Option<Self> {
+        if let Some((name, _)) = jar.get_main_class() {
+            return Some(VirtualMachine {
+                main_jar: jar,
+                library_jars: vec![],
+                curr_class_name: name,
+                executor: Executor { }
+            });
+        } else {
+            println!("Cannot find main class!");
+        }
+
+        None
+    }
+
+    pub fn add_library_jar(&mut self, jar: java::Jar) {
+        self.library_jars.push(jar);
+    }
+
     pub fn run(&mut self) {
-        if let Some(class) = &mut self.main_jar.classes.get(&*self.curr_class_name) {
-            class.initialize(self);
+        if let Some(class) = self.main_jar.classes.get_mut(&self.curr_class_name) {
+            if let Some(init_method) = class.methods.get("<init>") {
+                if !class.initialized {
+                    self.executor.execute_method(class, init_method);
+                    class.initialized = true;
+                }
+            } else {
+                panic!("Cannot find <init> method!");
+            }
 
             if let Some(method) = class.methods.get("main") {
-                self.execute_method(method);
+                self.executor.execute_method(class, method);
             } else {
                 panic!("Cannot find main method!");
             }
