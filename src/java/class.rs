@@ -142,7 +142,9 @@ pub struct Class {
     pub class_file: ClassFile,
 
     pub fields: HashMap<String, java::Field>,
-    pub methods: HashMap<String, java::Method>
+    pub methods: HashMap<String, java::Method>,
+
+    pub initialized: bool
 }
 
 impl Class {
@@ -184,12 +186,26 @@ impl Class {
             Some(Class {
                 class_file,
                 fields,
-                methods
+                methods,
+                initialized: false
             })
         } else {
             println!("Class parse error!");
             println!("{}", class_file.unwrap_err());
             None
+        }
+    }
+
+    pub fn initialize(&mut self, vm: &java::VirtualMachine) {
+        if self.initialized {
+            return;
+        }
+
+        if let Some(init_method) = self.methods.get("<init>") {
+            vm.execute_method(init_method);
+            self.initialized = true;
+        } else {
+            panic!("Failed to find <init> method!")
         }
     }
 

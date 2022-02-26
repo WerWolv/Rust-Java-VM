@@ -90,7 +90,7 @@ impl VirtualMachine {
         }
     }
 
-    fn execute_method(&self, method: &java::Method) {
+    pub fn execute_method(&self, method: &java::Method) {
         println!("Executing method '{}' [ {} ]", method.name, method.descriptor);
         for attribute in &method.attributes {
             if let java::Attribute::Code(code_attribute) = attribute {
@@ -115,11 +115,17 @@ impl VirtualMachine {
         println!("Method '{}' does not have a Code attribute!", method.name);
     }
 
-    pub fn run(&self) {
-        if let Some(main_method) = self.main_jar.classes.get(&*self.curr_class_name).unwrap().methods.get("main") {
-            self.execute_method(main_method);
+    pub fn run(&mut self) {
+        if let Some(class) = &mut self.main_jar.classes.get(&*self.curr_class_name) {
+            class.initialize(self);
+
+            if let Some(method) = class.methods.get("main") {
+                self.execute_method(method);
+            } else {
+                panic!("Cannot find main method!");
+            }
         } else {
-            println!("Cannot find main method!");
+            panic!("Cannot find main class!");
         }
     }
 
